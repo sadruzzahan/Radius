@@ -1,0 +1,11 @@
+node_modules/
+.agents/
+client/dist/
+ml_service/.venv/
+__pycache__/
+.pytest_cache/
+.env
+server/uploads/
+tmp/
+*.log
+*.pid
