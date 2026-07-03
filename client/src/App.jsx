@@ -53,7 +53,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const socket = useMemo(() => io(API_URL, { autoConnect: true }), []);
+  const socket = useMemo(() => io(API_URL || undefined, { autoConnect: true }), []);
   const role = user?.role ?? "guest";
 
   useEffect(() => {
