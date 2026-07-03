@@ -1,7 +1,12 @@
 import http from "node:http";
+import WebSocket from "ws";
 import { Server } from "socket.io";
 import { config } from "./config.js";
 import { createApp } from "./app.js";
+
+if (typeof globalThis.WebSocket === "undefined") {
+  globalThis.WebSocket = WebSocket;
+}
 
 const app = await createApp();
 const server = http.createServer(app);

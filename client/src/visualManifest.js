@@ -1,6 +1,6 @@
 export const CATEGORY_VISUALS = {
   phone: {
-    color: "#0f766e",
+    color: "#00d9c0",
     images: [
       {
         url: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=900&q=82",
@@ -15,7 +15,7 @@ export const CATEGORY_VISUALS = {
     ]
   },
   laptop: {
-    color: "#315b91",
+    color: "#3b82ff",
     images: [
       {
         url: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=900&q=82",
@@ -30,7 +30,7 @@ export const CATEGORY_VISUALS = {
     ]
   },
   camera: {
-    color: "#7c3aed",
+    color: "#a855f7",
     images: [
       {
         url: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=900&q=82",
@@ -45,7 +45,7 @@ export const CATEGORY_VISUALS = {
     ]
   },
   furniture: {
-    color: "#7a5b34",
+    color: "#ff8a3d",
     images: [
       {
         url: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=82",
@@ -60,7 +60,7 @@ export const CATEGORY_VISUALS = {
     ]
   },
   bicycle: {
-    color: "#0e7490",
+    color: "#06b6d4",
     images: [
       {
         url: "https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=900&q=82",
@@ -75,7 +75,7 @@ export const CATEGORY_VISUALS = {
     ]
   },
   appliance: {
-    color: "#b58522",
+    color: "#ffc531",
     images: [
       {
         url: "https://images.unsplash.com/photo-1585659722983-3a675dabf23d?auto=format&fit=crop&w=900&q=82",
@@ -90,7 +90,7 @@ export const CATEGORY_VISUALS = {
     ]
   },
   fashion: {
-    color: "#be4b67",
+    color: "#ff3d81",
     images: [
       {
         url: "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=82",
@@ -105,7 +105,7 @@ export const CATEGORY_VISUALS = {
     ]
   },
   books: {
-    color: "#6b7280",
+    color: "#f97316",
     images: [
       {
         url: "https://images.unsplash.com/photo-1495446815901-a7297e633e8d?auto=format&fit=crop&w=900&q=82",
@@ -120,7 +120,7 @@ export const CATEGORY_VISUALS = {
     ]
   },
   gaming: {
-    color: "#4338ca",
+    color: "#8b5cf6",
     images: [
       {
         url: "https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?auto=format&fit=crop&w=900&q=82",
@@ -135,7 +135,7 @@ export const CATEGORY_VISUALS = {
     ]
   },
   accessories: {
-    color: "#475569",
+    color: "#ec4899",
     images: [
       {
         url: "https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=900&q=82",
