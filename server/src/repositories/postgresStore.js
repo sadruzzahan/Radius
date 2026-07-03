@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { toListing, toPublicUser } from "./mappers.js";
 
 const nearbySql = `
-  select * from public.nearby_listings($1,$2,$3,$4,$5,$6,$7,$8,$9)
+  select * from public.nearby_listings($1::double precision,$2::double precision,$3::double precision,$4::text,$5::text,$6::text,$7::numeric,$8::numeric,$9::text)
 `;
 
 const listingByIdSql = `select * from public.listing_by_id($1)`;

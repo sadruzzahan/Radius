@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 export const projectEnvPath = fileURLToPath(new URL("../../.env", import.meta.url));
 
-dotenv.config({ path: projectEnvPath });
+dotenv.config({ path: projectEnvPath, override: true });
 
 export const config = {
   port: Number(process.env.PORT ?? 4000),
