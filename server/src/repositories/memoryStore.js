@@ -17,9 +17,14 @@ export class MemoryStore {
   constructor() {
     this.users = [];
     this.listings = [];
+    this.conversations = [];
     this.messages = [];
     this.reviews = [];
+    this.trades = [];
     this.reports = [];
+    this.mlEvents = [];
+    this.mlPredictions = [];
+    this.mlLabels = [];
   }
 
   async seed() {
@@ -32,6 +37,16 @@ export class MemoryStore {
       location: dhakaPoints.dhanmondi
     });
     const sellers = [];
+    const buyer = await this.createUser({
+      name: "Buyer One",
+      email: "buyer@local.test",
+      password: "password123",
+      role: "user",
+      location: dhakaPoints.dhanmondi,
+      reviewCount: 1,
+      ratingAverage: 4.8,
+      createdAt: new Date(Date.now() - 30 * 86400000).toISOString()
+    });
     for (const [idx, area] of ["kalabagan", "banani", "mirpur", "gulshan", "mohammadpur"].entries()) {
       sellers.push(
         await this.createUser({
@@ -65,14 +80,20 @@ export class MemoryStore {
         description: row[5],
         location: dhakaPoints[row[6]],
         photos: [{ url: `/uploads/demo-${index + 1}.jpg`, hash: index === 5 ? "ff00ff00ff00ff00" : randomUUID().replaceAll("-", "").slice(0, 16) }],
-        fraud: index === 5 ? { score: 84, decision: "review", signals: ["price_anomaly", "urgent_language"], explanations: ["Demo suspicious listing"] } : undefined
+        fraud: index === 5 ? { score: 84, decision: "review", signals: ["price_anomaly", "urgent_language"], explanations: ["Showcase suspicious marketplace case"] } : undefined
       });
     }
-    await this.createMessage({
+    const conversation = await this.ensureConversation({
       listingId: this.listings[0].id,
-      senderId: admin.id,
+      buyerId: buyer.id,
+      sellerId: sellers[0].id
+    });
+    await this.createMessage({
+      conversationId: conversation.id,
+      listingId: this.listings[0].id,
+      senderId: buyer.id,
       recipientId: sellers[0].id,
-      body: "Is this available for pickup near Dhanmondi?"
+      body: "Is this iPhone still available for pickup near Dhanmondi?"
     });
   }
 
@@ -192,24 +213,150 @@ export class MemoryStore {
   async createMessage(data) {
     const message = { id: randomUUID(), ...data, createdAt: nowIso() };
     this.messages.push(message);
+    const conversation = this.conversations.find((item) => item.id === message.conversationId);
+    if (conversation) conversation.updatedAt = message.createdAt;
     const sender = this.users.find((user) => user.id === message.senderId);
     return { ...message, sender: sender ? this.publicUser(sender) : null };
   }
 
-  async listMessages(listingId) {
-    return this.messages.filter((message) => message.listingId === listingId);
+  async ensureConversation(data) {
+    let conversation = this.conversations.find((item) => (
+      item.listingId === data.listingId && item.buyerId === data.buyerId && item.sellerId === data.sellerId
+    ));
+    if (!conversation) {
+      const createdAt = nowIso();
+      conversation = {
+        id: randomUUID(),
+        listingId: data.listingId,
+        buyerId: data.buyerId,
+        sellerId: data.sellerId,
+        status: "active",
+        createdAt,
+        updatedAt: createdAt
+      };
+      this.conversations.push(conversation);
+    }
+    return this.withConversationUsers(conversation);
+  }
+
+  withConversationUsers(conversation) {
+    const buyer = this.users.find((user) => user.id === conversation.buyerId);
+    const seller = this.users.find((user) => user.id === conversation.sellerId);
+    return {
+      ...conversation,
+      buyer: buyer ? this.publicUser(buyer) : undefined,
+      seller: seller ? this.publicUser(seller) : undefined
+    };
+  }
+
+  async getConversationById(id) {
+    const conversation = this.conversations.find((item) => item.id === id);
+    return conversation ? this.withConversationUsers(conversation) : null;
+  }
+
+  async listConversationsForListing(listingId, userId = null) {
+    return this.conversations
+      .filter((conversation) => conversation.listingId === listingId)
+      .filter((conversation) => !userId || conversation.buyerId === userId || conversation.sellerId === userId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map((conversation) => this.withConversationUsers(conversation));
+  }
+
+  async listMessages(listingId, filters = {}) {
+    return this.messages
+      .filter((message) => message.listingId === listingId)
+      .filter((message) => !filters.conversationId || message.conversationId === filters.conversationId);
   }
 
   async createReview(data) {
-    const review = { id: randomUUID(), ...data, rating: Number(data.rating), createdAt: nowIso() };
+    const trade = this.trades.find((item) => item.id === data.tradeId);
+    if (!trade) throw new Error("Trade not found");
+    if (trade.status !== "completed") throw new Error("Trade must be completed before review");
+    if (![trade.buyerId, trade.sellerId].includes(data.reviewerId)) throw new Error("Reviewer is not a trade participant");
+    const revieweeId = trade.buyerId === data.reviewerId ? trade.sellerId : trade.buyerId;
+    if (data.listingId && data.listingId !== trade.listingId) throw new Error("Review listing does not match trade");
+    if (data.revieweeId && data.revieweeId !== revieweeId) throw new Error("Reviewee does not match trade counterparty");
+    if (this.reviews.some((review) => review.tradeId === data.tradeId && review.reviewerId === data.reviewerId)) {
+      throw new Error("Review already exists for this trade");
+    }
+    const review = {
+      id: randomUUID(),
+      tradeId: trade.id,
+      listingId: trade.listingId,
+      reviewerId: data.reviewerId,
+      revieweeId,
+      rating: Number(data.rating),
+      comment: data.comment ?? "",
+      createdAt: nowIso()
+    };
     this.reviews.push(review);
-    const reviewee = this.users.find((user) => user.id === data.revieweeId);
+    const reviewee = this.users.find((user) => user.id === revieweeId);
     if (reviewee) {
       const total = reviewee.ratingAverage * reviewee.reviewCount + review.rating;
       reviewee.reviewCount += 1;
       reviewee.ratingAverage = Number((total / reviewee.reviewCount).toFixed(2));
     }
     return review;
+  }
+
+  async createTrade(data) {
+    if (this.trades.some((trade) => (
+      trade.listingId === data.listingId
+      && trade.buyerId === data.buyerId
+      && ["requested", "accepted"].includes(trade.status)
+    ))) {
+      throw new Error("You already have an open trade for this listing");
+    }
+    const trade = {
+      id: randomUUID(),
+      listingId: data.listingId,
+      buyerId: data.buyerId,
+      sellerId: data.sellerId,
+      price: Number(data.price),
+      status: data.status ?? "requested",
+      note: data.note ?? "",
+      createdAt: nowIso(),
+      updatedAt: nowIso()
+    };
+    this.trades.push(trade);
+    return trade;
+  }
+
+  async getTradeById(id) {
+    return this.trades.find((trade) => trade.id === id) ?? null;
+  }
+
+  async updateTradeStatus(id, status) {
+    const allowed = {
+      accepted: ["requested"],
+      rejected: ["requested"],
+      cancelled: ["requested", "accepted"],
+      completed: ["accepted"]
+    };
+    if (!allowed[status]) throw new Error("Unsupported trade transition");
+    const trade = this.trades.find((item) => item.id === id);
+    if (!trade) throw new Error("Trade not found");
+    if (!allowed[status].includes(trade.status)) {
+      throw new Error(`Cannot move trade from ${trade.status} to ${status}`);
+    }
+    if (status === "accepted" && this.trades.some((item) => item.listingId === trade.listingId && item.id !== id && ["accepted", "completed"].includes(item.status))) {
+      throw new Error("Listing already has an accepted trade");
+    }
+    const previousStatus = trade.status;
+    trade.status = status;
+    trade.updatedAt = nowIso();
+    const listing = this.listings.find((item) => item.id === trade.listingId);
+    if (listing && status === "accepted") listing.status = "reserved";
+    if (listing && status === "completed") listing.status = "sold";
+    if (listing && status === "cancelled" && previousStatus === "accepted" && !this.trades.some((item) => item.listingId === trade.listingId && ["accepted", "completed"].includes(item.status))) {
+      listing.status = "available";
+    }
+    if (listing) listing.updatedAt = nowIso();
+    return { trade, item: listing ? this.withSeller(listing) : null };
+  }
+
+  async listTrades() {
+    return [...this.trades].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async createReport(data) {
@@ -247,5 +394,35 @@ export class MemoryStore {
       flaggedListings: this.listings.filter((listing) => listing.fraud?.decision === "review").length,
       soldListings: this.listings.filter((listing) => listing.status === "sold").length
     };
+  }
+
+  async createMlEvent(data) {
+    const event = { id: randomUUID(), payload: {}, createdAt: nowIso(), ...data };
+    this.mlEvents.push(event);
+    return event;
+  }
+
+  async listMlEvents() {
+    return [...this.mlEvents].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async createMlPrediction(data) {
+    const prediction = { id: randomUUID(), createdAt: nowIso(), ...data };
+    this.mlPredictions.push(prediction);
+    return prediction;
+  }
+
+  async listMlPredictions() {
+    return [...this.mlPredictions].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async createMlLabel(data) {
+    const label = { id: randomUUID(), createdAt: nowIso(), ...data };
+    this.mlLabels.push(label);
+    return label;
+  }
+
+  async listMlLabels() {
+    return [...this.mlLabels].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 }

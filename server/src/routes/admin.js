@@ -27,6 +27,7 @@ router.patch("/reports/:id", async (req, res) => {
 
 router.post("/fraud-queue/:id/decision", async (req, res) => {
   const decision = req.body.decision === "remove" ? "removed" : "available";
+  const label = req.body.decision === "remove" ? "fraud" : "clean";
   const existing = await store.getListingById(req.params.id);
   const item = await store.updateListing(req.params.id, {
     status: decision,
@@ -38,6 +39,21 @@ router.post("/fraud-queue/:id/decision", async (req, res) => {
     }
   });
   if (!item) return res.status(404).json({ error: "Listing not found" });
+  await store.createMlEvent?.({
+    eventType: "admin_fraud_decision",
+    listingId: req.params.id,
+    actorId: req.user.id,
+    payload: { decision: req.body.decision === "remove" ? "remove" : "approve" }
+  });
+  await store.createMlLabel?.({
+    sourceType: "admin",
+    sourceId: req.params.id,
+    listingId: req.params.id,
+    actorId: req.user.id,
+    label,
+    confidence: 1,
+    notes: `Admin fraud queue decision: ${req.body.decision === "remove" ? "remove" : "approve"}`
+  });
   res.json({ item });
 });
 

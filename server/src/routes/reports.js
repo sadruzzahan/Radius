@@ -12,7 +12,25 @@ router.post("/", requireAuth, async (req, res) => {
     details: z.string().max(1000).optional().default("")
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid report" });
-  res.status(201).json({ item: await store.createReport({ ...parsed.data, reporterId: req.user.id }) });
+  const report = await store.createReport({ ...parsed.data, reporterId: req.user.id });
+  await store.createMlEvent?.({
+    eventType: "user_report_created",
+    listingId: report.listingId,
+    actorId: req.user.id,
+    payload: { reason: report.reason, reportId: report.id }
+  });
+  if (report.reason !== "other") {
+    await store.createMlLabel?.({
+      sourceType: "report",
+      sourceId: report.id,
+      listingId: report.listingId,
+      actorId: req.user.id,
+      label: report.reason,
+      confidence: 0.35,
+      notes: report.details
+    });
+  }
+  res.status(201).json({ item: report });
 });
 
 export default router;

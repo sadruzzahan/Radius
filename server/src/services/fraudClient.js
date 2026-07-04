@@ -25,8 +25,11 @@ export async function scoreListingWithMl(listing, context) {
     return {
       score: Number(listing.price) > 50000 ? 35 : 0,
       decision: "allow",
+      threshold_band: "allow",
       signals: ["ml_service_unavailable"],
-      explanations: ["FastAPI service was unavailable; used conservative fallback."]
+      explanations: ["FastAPI service was unavailable; used conservative fallback."],
+      model_version: "node-fallback-v1",
+      feature_snapshot_hash: ""
     };
   }
 }

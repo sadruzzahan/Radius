@@ -23,6 +23,10 @@ const listingSchema = z.object({
 });
 
 const statusSchema = z.object({ status: z.enum(["available", "reserved", "sold"]) });
+const listingPatchSchema = listingSchema
+  .omit({ photos: true })
+  .partial()
+  .refine((patch) => Object.keys(patch).length > 0, "At least one listing field is required.");
 
 function canMutateListing(listing, user) {
   return listing.sellerId === user.id || user.role === "admin";
@@ -60,14 +64,34 @@ router.post("/", requireAuth, async (req, res) => {
     existingDescriptions: await store.listExistingDescriptions()
   });
   const listing = await store.createListing({ ...parsed.data, sellerId: req.user.id, fraud: scoring });
+  await store.createMlEvent?.({
+    eventType: "listing_submitted",
+    listingId: listing.id,
+    actorId: req.user.id,
+    payload: { category: listing.category, condition: listing.condition, price: listing.price }
+  });
+  await store.createMlPrediction?.({
+    listingId: listing.id,
+    modelName: "trust_fraud_classifier",
+    modelVersion: scoring.model_version ?? scoring.modelVersion ?? "unknown",
+    score: scoring.score ?? 0,
+    decision: scoring.decision ?? "allow",
+    thresholdBand: scoring.threshold_band ?? scoring.thresholdBand ?? "allow",
+    signals: scoring.signals ?? [],
+    explanations: scoring.explanations ?? [],
+    featureSnapshotHash: scoring.feature_snapshot_hash ?? scoring.featureSnapshotHash ?? null,
+    rawResponse: scoring
+  });
   res.status(201).json({ item: listing });
 });
 
 router.patch("/:id", requireAuth, async (req, res) => {
+  const parsed = listingPatchSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid listing update", details: parsed.error.issues });
   const listing = await store.getListingById(req.params.id);
   if (!listing) return res.status(404).json({ error: "Listing not found" });
   if (!canMutateListing(listing, req.user)) return res.status(403).json({ error: "Forbidden" });
-  res.json({ item: await store.updateListing(req.params.id, req.body) });
+  res.json({ item: await store.updateListing(req.params.id, parsed.data) });
 });
 
 router.patch("/:id/status", requireAuth, async (req, res) => {

@@ -19,3 +19,6 @@ def test_score_listing_combines_duplicate_price_and_behavior_signals():
     assert "duplicate_image" in result["signals"]
     assert "new_seller_high_value" in result["signals"]
     assert result["decision"] == "review"
+    assert result["model_version"] == "rules-risk-v1"
+    assert result["threshold_band"] == "high_priority_review"
+    assert len(result["feature_snapshot_hash"]) == 64

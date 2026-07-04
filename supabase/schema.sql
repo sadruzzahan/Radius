@@ -49,8 +49,21 @@ create table if not exists public.listing_photos (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.conversations (
+  id uuid primary key default gen_random_uuid(),
+  listing_id uuid not null references public.listings(id) on delete cascade,
+  buyer_id uuid not null references public.app_users(id) on delete cascade,
+  seller_id uuid not null references public.app_users(id) on delete cascade,
+  status text not null default 'active' check (status in ('active', 'closed')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (buyer_id <> seller_id),
+  unique (listing_id, buyer_id, seller_id)
+);
+
 create table if not exists public.chat_messages (
   id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
   listing_id uuid not null references public.listings(id) on delete cascade,
   sender_id uuid not null references public.app_users(id) on delete cascade,
   recipient_id uuid not null references public.app_users(id) on delete cascade,
@@ -58,16 +71,30 @@ create table if not exists public.chat_messages (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.trades (
+  id uuid primary key default gen_random_uuid(),
+  listing_id uuid not null references public.listings(id) on delete cascade,
+  buyer_id uuid not null references public.app_users(id) on delete cascade,
+  seller_id uuid not null references public.app_users(id) on delete cascade,
+  price numeric(12,2) not null check (price >= 0),
+  status text not null default 'requested' check (status in ('requested', 'accepted', 'rejected', 'cancelled', 'completed')),
+  note text not null default '' check (char_length(note) <= 1000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (buyer_id <> seller_id)
+);
+
 create table if not exists public.reviews (
   id uuid primary key default gen_random_uuid(),
-  trade_id text not null,
+  trade_id uuid not null references public.trades(id) on delete cascade,
   listing_id uuid not null references public.listings(id) on delete cascade,
   reviewer_id uuid not null references public.app_users(id) on delete cascade,
   reviewee_id uuid not null references public.app_users(id) on delete cascade,
   rating integer not null check (rating between 1 and 5),
   comment text not null default '' check (char_length(comment) <= 600),
   created_at timestamptz not null default now(),
-  unique (trade_id, reviewer_id)
+  unique (trade_id, reviewer_id),
+  check (reviewer_id <> reviewee_id)
 );
 
 create table if not exists public.reports (
@@ -80,6 +107,64 @@ create table if not exists public.reports (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.ml_events (
+  id uuid primary key default gen_random_uuid(),
+  event_type text not null,
+  listing_id uuid references public.listings(id) on delete set null,
+  user_id uuid references public.app_users(id) on delete set null,
+  actor_id uuid references public.app_users(id) on delete set null,
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.ml_predictions (
+  id uuid primary key default gen_random_uuid(),
+  listing_id uuid references public.listings(id) on delete cascade,
+  model_name text not null default 'trust_fraud_classifier',
+  model_version text not null,
+  score integer not null check (score >= 0 and score <= 100),
+  decision text not null check (decision in ('allow', 'review', 'block')),
+  threshold_band text not null default 'allow',
+  signals text[] not null default '{}',
+  explanations text[] not null default '{}',
+  feature_snapshot_hash text,
+  raw_response jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.ml_labels (
+  id uuid primary key default gen_random_uuid(),
+  source_type text not null check (source_type in ('admin', 'report', 'manual_csv')),
+  source_id text,
+  listing_id uuid references public.listings(id) on delete set null,
+  actor_id uuid references public.app_users(id) on delete set null,
+  label text not null check (label in ('clean', 'fraud', 'duplicate', 'prohibited', 'spam', 'unknown')),
+  confidence numeric(4,3) not null default 1 check (confidence >= 0 and confidence <= 1),
+  notes text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.ml_model_versions (
+  id uuid primary key default gen_random_uuid(),
+  model_name text not null,
+  model_version text not null unique,
+  status text not null default 'candidate' check (status in ('candidate', 'active', 'archived', 'rejected')),
+  metrics jsonb not null default '{}'::jsonb,
+  artifact_path text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.ml_training_runs (
+  id uuid primary key default gen_random_uuid(),
+  model_name text not null,
+  model_version text not null,
+  dataset_version text not null,
+  training_rows integer not null default 0 check (training_rows >= 0),
+  metrics jsonb not null default '{}'::jsonb,
+  promotion_status text not null default 'candidate' check (promotion_status in ('candidate', 'promoted', 'rejected')),
+  created_at timestamptz not null default now()
+);
+
 create index if not exists app_users_email_idx on public.app_users (lower(email));
 create index if not exists app_users_location_gix on public.app_users using gist (location);
 create index if not exists listings_seller_id_idx on public.listings (seller_id);
@@ -89,22 +174,45 @@ create index if not exists listings_category_condition_price_idx on public.listi
 create index if not exists listings_search_idx on public.listings using gin (to_tsvector('english', title || ' ' || brand || ' ' || description));
 create index if not exists listing_photos_listing_id_idx on public.listing_photos (listing_id);
 create index if not exists listing_photos_hash_idx on public.listing_photos (hash) where hash is not null;
+create index if not exists conversations_listing_updated_idx on public.conversations (listing_id, updated_at desc);
+create index if not exists conversations_buyer_idx on public.conversations (buyer_id);
+create index if not exists conversations_seller_idx on public.conversations (seller_id);
 create index if not exists chat_messages_listing_created_idx on public.chat_messages (listing_id, created_at);
+create index if not exists chat_messages_conversation_created_idx on public.chat_messages (conversation_id, created_at);
 create index if not exists chat_messages_sender_id_idx on public.chat_messages (sender_id);
 create index if not exists chat_messages_recipient_id_idx on public.chat_messages (recipient_id);
 create index if not exists reviews_reviewee_id_idx on public.reviews (reviewee_id);
+create index if not exists trades_buyer_id_idx on public.trades (buyer_id);
+create index if not exists trades_seller_id_idx on public.trades (seller_id);
+create unique index if not exists trades_one_accepted_sale_idx on public.trades (listing_id) where status in ('accepted', 'completed');
+create unique index if not exists trades_listing_buyer_open_idx on public.trades (listing_id, buyer_id) where status in ('requested', 'accepted');
 create index if not exists reports_listing_id_idx on public.reports (listing_id);
 create index if not exists reports_reporter_id_idx on public.reports (reporter_id);
 create index if not exists reports_status_idx on public.reports (status);
+create index if not exists ml_events_type_created_idx on public.ml_events (event_type, created_at desc);
+create index if not exists ml_events_listing_idx on public.ml_events (listing_id);
+create index if not exists ml_predictions_listing_created_idx on public.ml_predictions (listing_id, created_at desc);
+create index if not exists ml_predictions_model_version_idx on public.ml_predictions (model_version);
+create index if not exists ml_labels_listing_idx on public.ml_labels (listing_id);
+create index if not exists ml_labels_source_idx on public.ml_labels (source_type, source_id);
+create index if not exists ml_model_versions_status_idx on public.ml_model_versions (model_name, status);
+create index if not exists ml_training_runs_model_created_idx on public.ml_training_runs (model_name, created_at desc);
 
 alter table public.app_users enable row level security;
 alter table public.listings enable row level security;
 alter table public.listing_photos enable row level security;
+alter table public.conversations enable row level security;
 alter table public.chat_messages enable row level security;
 alter table public.reviews enable row level security;
+alter table public.trades enable row level security;
 alter table public.reports enable row level security;
+alter table public.ml_events enable row level security;
+alter table public.ml_predictions enable row level security;
+alter table public.ml_labels enable row level security;
+alter table public.ml_model_versions enable row level security;
+alter table public.ml_training_runs enable row level security;
 
-grant all on table public.app_users, public.listings, public.listing_photos, public.chat_messages, public.reviews, public.reports to service_role;
+grant all on table public.app_users, public.listings, public.listing_photos, public.conversations, public.chat_messages, public.reviews, public.trades, public.reports, public.ml_events, public.ml_predictions, public.ml_labels, public.ml_model_versions, public.ml_training_runs to service_role;
 grant usage, select on sequence public.listing_photos_id_seq to service_role;
 
 create or replace function public.nearby_listings(
@@ -147,6 +255,7 @@ returns table (
 )
 language sql
 stable
+set search_path = public
 as $$
   with origin as (
     select st_setsrid(st_makepoint(p_lng, p_lat), 4326)::geography as point
@@ -226,6 +335,7 @@ returns table (
 )
 language sql
 stable
+set search_path = public
 as $$
   select
     l.id, l.seller_id, l.title, l.category, l.brand, l.condition, l.price, l.description,
@@ -271,6 +381,7 @@ returns table (
 )
 language sql
 stable
+set search_path = public
 as $$
   select * from public.nearby_listings(23.7465, 90.376, 999, null, null, null, null, null, null)
   where fraud_decision = 'review';
@@ -280,6 +391,7 @@ create or replace function public.admin_marketplace_stats()
 returns jsonb
 language sql
 stable
+set search_path = public
 as $$
   select jsonb_build_object(
     'users', (select count(*) from public.app_users),
