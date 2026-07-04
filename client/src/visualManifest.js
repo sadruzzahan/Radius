@@ -11,6 +11,16 @@ export const CATEGORY_VISUALS = {
         url: "https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=900&q=82",
         credit: "Photo by Onur Binay on Unsplash",
         href: "https://unsplash.com/photos/_RpPMkqTTTg"
+      },
+      {
+        url: "https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?auto=format&fit=crop&w=900&q=82",
+        credit: "Photo by Daniel Romero on Unsplash",
+        href: "https://unsplash.com/photos/mV2f8vVVkSI"
+      },
+      {
+        url: "https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?auto=format&fit=crop&w=900&q=82",
+        credit: "Photo by Jonas Leupe on Unsplash",
+        href: "https://unsplash.com/photos/0IVop5v4MMU"
       }
     ]
   },
@@ -155,8 +165,9 @@ const fallbackCategory = "accessories";
 
 function stableIndex(value, length) {
   const text = String(value ?? "");
-  const sum = [...text].reduce((total, char) => total + char.charCodeAt(0), 0);
-  return sum % length;
+  let hash = 5381;
+  for (const char of text) hash = ((hash << 5) + hash) ^ char.charCodeAt(0);
+  return Math.abs(hash) % length;
 }
 
 function normalizePhotoUrl(url, apiUrl) {
@@ -170,8 +181,15 @@ function normalizePhotoUrl(url, apiUrl) {
 export function getCategoryVisual(category, seed = "") {
   const key = CATEGORY_VISUALS[category] ? category : fallbackCategory;
   const visual = CATEGORY_VISUALS[key];
+  const text = String(seed).toLowerCase();
+  let index = stableIndex(seed || key, visual.images.length);
+  if (key === "phone") {
+    if (text.includes("samsung")) index = Math.min(3, visual.images.length - 1);
+    else if (text.includes("urgent") || text.includes("pro")) index = Math.min(2, visual.images.length - 1);
+    else if (text.includes("iphone")) index = 0;
+  }
   return {
-    ...visual.images[stableIndex(seed || key, visual.images.length)],
+    ...visual.images[index],
     category: key,
     color: visual.color,
     isFallback: true
@@ -191,6 +209,6 @@ export function getListingVisual(listing, apiUrl = "") {
       isFallback: false
     };
   }
-  const fallback = getCategoryVisual(listing?.category, listing?.id ?? listing?.title);
+  const fallback = getCategoryVisual(listing?.category, listing?.title ?? listing?.id);
   return { ...fallback, src: fallback.url };
 }

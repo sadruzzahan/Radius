@@ -67,6 +67,7 @@ Demo accounts:
 
 - Admin: `admin@local.test` / `admin12345`
 - Sellers: `seller1@local.test` through `seller5@local.test` / `password123`
+- Showcase owner: `istykhan.ik@gmail.com` / `password123` when created by `npm run seed:showcase`
 
 ## Verify
 
@@ -79,7 +80,20 @@ npm run build
 
 `ml_service/data/market_prices.csv` is the bundled baseline dataset for category-condition price statistics and the price suggestion regressor. `ml_service/scripts/collect_bikroy_sample.py` is a documented collector template for expanding the dataset from allowed public listing pages or manually collected CSVs.
 
-`ml_service/scripts/build_market_dataset.py` generates `ml_service/data/market_prices_expanded.csv` with 500+ deterministic Dhaka secondhand-market rows across phones, laptops, cameras, furniture, bicycles, appliances, fashion, books, gaming, and accessories. The ML service prefers the expanded CSV when present.
+`ml_service/scripts/build_market_dataset.py` generates `ml_service/data/market_prices_expanded.csv` with deterministic Dhaka secondhand-market rows across phones, laptops, cameras, furniture, bicycles, appliances, fashion, books, gaming, and accessories. The ML service prefers the expanded CSV when present.
+
+`ml_service/scripts/build_fraud_dataset.py` generates `ml_service/data/fraud_listings_synthetic.csv`, a labeled synthetic fraud dataset with clean, fraud, duplicate, prohibited, and spam examples for academic experimentation and model training demos.
+
+Generate the large local datasets:
+
+```bash
+npm run dataset:large
+```
+
+Current large dataset targets:
+
+- 15,000 price rows in `market_prices_expanded.csv`
+- 20,000 labeled fraud rows in `fraud_listings_synthetic.csv`
 
 ## Showcase Trust/Risk Engine
 
@@ -101,7 +115,10 @@ Initial showcase policy: reports are weak labels, admin decisions are strong lab
 ## Large Demo Seed
 
 ```bash
+npm run seed:showcase
 npm run seed:500 -w server
 ```
 
-This creates 55 showcase users, 500 listings, 140 completed-trade reviews, 35 reports, varied statuses, and deterministic duplicate/risk cases through the configured store.
+`npm run seed:showcase` creates targeted listings for `istykhan.ik@gmail.com`, including clean listings, multiple fraud types, ML prediction records, ML labels, reports, conversations, and completed trades.
+
+`npm run seed:500 -w server` creates 55 showcase users, 500 listings, 140 completed-trade reviews, 35 reports, varied statuses, and deterministic duplicate/risk cases through the configured store. It is not idempotent; use it when you intentionally want more demo volume.

@@ -1,5 +1,6 @@
 import csv
 import random
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,10 +94,11 @@ def build_dataset(total_rows: int = 520) -> list[dict[str, str]]:
 
 
 def main() -> None:
+    total_rows = int(sys.argv[1]) if len(sys.argv) > 1 else 520
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    rows = build_dataset()
+    rows = build_dataset(total_rows)
     with OUTPUT.open("w", newline="") as target:
-        writer = csv.DictWriter(target, fieldnames=["category", "condition", "brand", "price"])
+        writer = csv.DictWriter(target, fieldnames=["category", "condition", "brand", "price"], lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     print(f"Wrote {len(rows)} rows to {OUTPUT}")

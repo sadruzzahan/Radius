@@ -9,6 +9,7 @@
     "start": "node src/index.js",
     "seed": "node src/scripts/seed.js",
     "seed:500": "node src/scripts/seed500.js",
+    "seed:showcase": "node src/scripts/seedShowcase.js",
     "test": "vitest run"
   },
   "dependencies": {

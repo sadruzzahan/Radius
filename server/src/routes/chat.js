@@ -33,6 +33,10 @@ function isParticipant(conversation, userId) {
   return conversation?.buyerId === userId || conversation?.sellerId === userId;
 }
 
+router.get("/", requireAuth, async (req, res) => {
+  res.json({ items: await store.listConversationsForUser(req.user.id) });
+});
+
 async function conversationForRequest({ listing, user, conversationId, createForBuyer = false }) {
   if (listing.sellerId === user.id) {
     const conversations = await store.listConversationsForListing(listing.id, user.id);
@@ -107,8 +111,9 @@ router.post("/:listingId", requireAuth, async (req, res) => {
     recipientId,
     body: parsed.data.body
   });
+  const conversation = await store.getConversationById(context.conversation.id);
   emitToListing(req, listing.id, "chat:message", message);
-  res.status(201).json({ conversation: context.conversation, item: message });
+  res.status(201).json({ conversation, item: message });
 });
 
 router.get("/:listingId/trades", requireAuth, async (req, res) => {

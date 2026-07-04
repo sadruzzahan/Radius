@@ -18,6 +18,10 @@ router.get("/reports", async (_req, res) => {
   res.json({ items: await store.listReports() });
 });
 
+router.get("/ml/predictions", async (_req, res) => {
+  res.json({ items: await store.listMlPredictions?.() ?? [] });
+});
+
 router.patch("/reports/:id", async (req, res) => {
   const status = req.body.status === "resolved" ? "resolved" : "open";
   const report = await store.updateReport(req.params.id, { status });
