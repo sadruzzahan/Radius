@@ -96,7 +96,7 @@ for (let i = 0; i < 500; i += 1) {
       : `${condition} ${brand} ${category} available near ${area[0]} with local pickup and inspection.`,
     location: { lat: area[1] + ((i % 9) - 4) * 0.0012, lng: area[2] + ((i % 7) - 3) * 0.0012 },
     status: statuses[i % statuses.length],
-    photos: [{ ...photo, hash: duplicateHash, storage: "remote" }],
+    photos: [{ ...photo, hash: duplicateHash, storage: "local" }],
     fraud: suspicious
       ? { score: 82, decision: "review", signals: ["price_anomaly", "urgent_language", "duplicate_image"], explanations: ["Seeded suspicious marketplace case."] }
       : { score: i % 19, decision: "allow", signals: [], explanations: [] }
@@ -106,10 +106,19 @@ for (let i = 0; i < 500; i += 1) {
 
 for (let i = 0; i < 140; i += 1) {
   const listing = created[i % created.length];
-  await store.createReview({
-    tradeId: `seed-trade-${i + 1}`,
+  const reviewer = sellers[(i + 3) % sellers.length];
+  const trade = await store.createTrade({
     listingId: listing.id,
-    reviewerId: sellers[(i + 3) % sellers.length].id,
+    buyerId: reviewer.id,
+    sellerId: listing.sellerId,
+    price: listing.price,
+    status: "completed",
+    note: "Seeded completed local trade."
+  });
+  await store.createReview({
+    tradeId: trade.id,
+    listingId: listing.id,
+    reviewerId: reviewer.id,
     revieweeId: listing.sellerId,
     rating: 3 + (i % 3),
     comment: "Seeded completed local trade review."

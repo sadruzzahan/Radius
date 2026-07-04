@@ -10,11 +10,12 @@ import reviewRoutes from "./routes/reviews.js";
 import reportRoutes from "./routes/reports.js";
 import adminRoutes from "./routes/admin.js";
 import uploadRoutes from "./routes/uploads.js";
-import { config } from "./config.js";
+import { config, validateRuntimeConfig } from "./config.js";
 import { optionalAuth } from "./middleware/auth.js";
 import { store } from "./repositories/store.js";
 
 export async function createApp() {
+  validateRuntimeConfig();
   await store.seed();
   const app = express();
   app.use(helmet({ contentSecurityPolicy: false }));

@@ -3,7 +3,7 @@ import { config } from "../config.js";
 import { store } from "../repositories/store.js";
 
 export function signToken(user) {
-  return jwt.sign({ sub: user.id, role: user.role, email: user.email }, config.jwtSecret, { expiresIn: "7d" });
+  return jwt.sign({ sub: user.id, role: user.role, email: user.email }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
 }
 
 export async function optionalAuth(req, _res, next) {

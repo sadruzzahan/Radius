@@ -1,4 +1,4 @@
-from io import BytesIO
+from io import BytesIO, StringIO
 
 import imagehash
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 
 from app.services.fraud import evaluate_fixture, score_listing
 from app.services.pricing import suggest_price
+from app.services.training import train_candidate
+from app.services.trust_data import parse_manual_csv
 
 
 class ScoreRequest(BaseModel):
@@ -19,6 +21,12 @@ class PriceRequest(BaseModel):
     category: str
     condition: str
     brand: str = ""
+
+
+class TrainRequest(BaseModel):
+    records: list[dict]
+    minimum_recall: float = 0.7
+    maximum_false_positive_rate: float = 0.25
 
 
 app = FastAPI(title="Hyperlocal Marketplace Fraud ML Service", version="0.1.0")
@@ -50,6 +58,20 @@ def score(payload: ScoreRequest) -> dict:
 @app.post("/suggest-price")
 def suggest(payload: PriceRequest) -> dict:
     return suggest_price(payload.category, payload.condition, payload.brand)
+
+
+@app.post("/datasets/manual-csv")
+async def import_manual_csv(file: UploadFile = File(...)) -> dict:
+    if file.content_type and file.content_type not in {"text/csv", "application/vnd.ms-excel", "application/octet-stream"}:
+        raise HTTPException(status_code=400, detail="Only CSV uploads are supported.")
+    contents = (await file.read()).decode("utf-8-sig")
+    accepted, rejected = parse_manual_csv(StringIO(contents))
+    return {"accepted": accepted, "rejected": rejected, "accepted_count": len(accepted), "rejected_count": len(rejected)}
+
+
+@app.post("/train/candidate")
+def train(payload: TrainRequest) -> dict:
+    return train_candidate(payload.records, payload.minimum_recall, payload.maximum_false_positive_rate)
 
 
 @app.get("/evaluate")

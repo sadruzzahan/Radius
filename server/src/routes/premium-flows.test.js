@@ -20,11 +20,17 @@ async function login(app, email = "seller1@local.test", password = "password123"
 describe("premium marketplace flows", () => {
   let app;
   let sellerToken;
+  let seller2Token;
+  let buyerToken;
+  let outsiderToken;
   let adminToken;
 
   beforeAll(async () => {
     app = await makeApp();
     sellerToken = await login(app);
+    seller2Token = await login(app, "seller2@local.test", "password123");
+    buyerToken = await login(app, "buyer@local.test", "password123");
+    outsiderToken = await login(app, "seller3@local.test", "password123");
     adminToken = await login(app, "admin@local.test", "admin12345");
   });
 
@@ -95,5 +101,116 @@ describe("premium marketplace flows", () => {
 
     expect(resolved.status).toBe(200);
     expect(resolved.body.item.status).toBe("resolved");
+
+    const { store } = await import("../repositories/store.js");
+    const events = await store.listMlEvents();
+    expect(events.some((event) => event.eventType === "user_report_created" && event.listingId === report.body.item.listingId)).toBe(true);
+    const labels = await store.listMlLabels();
+    expect(labels.some((label) => label.sourceType === "report" && label.label === "fraud" && label.listingId === report.body.item.listingId)).toBe(true);
+  });
+
+  it("records admin fraud queue decisions as strong ML labels", async () => {
+    const flagged = await request(app).get("/api/admin/fraud-queue").set("Authorization", `Bearer ${adminToken}`);
+    const listing = flagged.body.items[0];
+    expect(listing).toBeTruthy();
+
+    const response = await request(app)
+      .post(`/api/admin/fraud-queue/${listing.id}/decision`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ decision: "remove" });
+
+    expect(response.status).toBe(200);
+    const { store } = await import("../repositories/store.js");
+    const labels = await store.listMlLabels();
+    expect(labels).toContainEqual(expect.objectContaining({
+      sourceType: "admin",
+      label: "fraud",
+      listingId: listing.id,
+      actorId: expect.any(String)
+    }));
+  });
+
+  it("lets a buyer message the iPhone seller without supplying a recipient id", async () => {
+    const listings = await request(app).get("/api/listings?radiusKm=999").set("Authorization", `Bearer ${buyerToken}`);
+    const iphone = listings.body.items.find((item) => item.title === "iPhone 13 128GB");
+
+    const response = await request(app)
+      .post(`/api/chat/${iphone.id}`)
+      .set("Authorization", `Bearer ${buyerToken}`)
+      .send({ body: "I can pick up the iPhone today." });
+
+    expect(response.status).toBe(201);
+    expect(response.body.item).toMatchObject({
+      listingId: iphone.id,
+      senderId: expect.any(String),
+      recipientId: iphone.sellerId,
+      body: "I can pick up the iPhone today."
+    });
+  });
+
+  it("keeps listing chat scoped to the buyer-seller conversation", async () => {
+    const listings = await request(app).get("/api/listings?radiusKm=999").set("Authorization", `Bearer ${buyerToken}`);
+    const samsung = listings.body.items.find((item) => item.title === "Samsung Galaxy S22");
+
+    const sent = await request(app)
+      .post(`/api/chat/${samsung.id}`)
+      .set("Authorization", `Bearer ${buyerToken}`)
+      .send({ body: "Is the Samsung available today?" });
+    expect(sent.status).toBe(201);
+
+    const outsiderChat = await request(app).get(`/api/chat/${samsung.id}?conversationId=${sent.body.conversation.id}`).set("Authorization", `Bearer ${outsiderToken}`);
+    expect(outsiderChat.status).toBe(200);
+    expect(outsiderChat.body.items).toHaveLength(0);
+  });
+
+  it("uses requested, accepted, and completed trade states before reviews", async () => {
+    const listings = await request(app).get("/api/listings?radiusKm=999").set("Authorization", `Bearer ${buyerToken}`);
+    const samsung = listings.body.items.find((item) => item.title === "Samsung Galaxy S22");
+
+    const requestTrade = await request(app)
+      .post(`/api/chat/${samsung.id}/buy`)
+      .set("Authorization", `Bearer ${buyerToken}`)
+      .send({ note: "Requested after chat." });
+
+    expect(requestTrade.status).toBe(201);
+    expect(requestTrade.body.trade).toMatchObject({
+      listingId: samsung.id,
+      buyerId: expect.any(String),
+      sellerId: samsung.sellerId,
+      status: "requested",
+      price: samsung.price
+    });
+    expect(requestTrade.body.item.status).toBe("available");
+
+    const earlyReview = await request(app)
+      .post("/api/reviews")
+      .set("Authorization", `Bearer ${buyerToken}`)
+      .send({ tradeId: requestTrade.body.trade.id, rating: 5, comment: "Too early." });
+    expect(earlyReview.status).toBe(409);
+
+    const accepted = await request(app)
+      .post(`/api/chat/${samsung.id}/trades/${requestTrade.body.trade.id}/accept`)
+      .set("Authorization", `Bearer ${seller2Token}`);
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.trade.status).toBe("accepted");
+    expect(accepted.body.item.status).toBe("reserved");
+
+    const completed = await request(app)
+      .post(`/api/chat/${samsung.id}/trades/${requestTrade.body.trade.id}/complete`)
+      .set("Authorization", `Bearer ${buyerToken}`);
+    expect(completed.status).toBe(200);
+    expect(completed.body.trade.status).toBe("completed");
+    expect(completed.body.item.status).toBe("sold");
+
+    const review = await request(app)
+      .post("/api/reviews")
+      .set("Authorization", `Bearer ${buyerToken}`)
+      .send({ tradeId: requestTrade.body.trade.id, rating: 5, comment: "Smooth local pickup." });
+    expect(review.status).toBe(201);
+    expect(review.body.item).toMatchObject({
+      tradeId: requestTrade.body.trade.id,
+      listingId: samsung.id,
+      rating: 5
+    });
   });
 });

@@ -1,6 +1,11 @@
+import hashlib
+import json
 from difflib import SequenceMatcher
 
 from app.services.pricing import price_anomaly
+
+
+MODEL_VERSION = "rules-risk-v1"
 
 
 def hamming_distance(hex_a: str, hex_b: str) -> int:
@@ -68,11 +73,35 @@ def score_listing(listing: dict, existing_hashes: list[str], existing_descriptio
         explanations.append(explanation)
 
     final_score = min(100, round(score))
+    if final_score >= 70:
+        threshold_band = "high_priority_review"
+    elif final_score >= 40:
+        threshold_band = "review"
+    else:
+        threshold_band = "allow"
+    feature_snapshot = {
+        "category": listing.get("category", ""),
+        "condition": listing.get("condition", ""),
+        "price": float(listing.get("price") or 0),
+        "brand": listing.get("brand", ""),
+        "description_length": len(listing.get("description") or ""),
+        "photo_hash_count": len(listing.get("photo_hashes") or []),
+        "seller": listing.get("seller") or {},
+        "existing_hash_count": len(existing_hashes or []),
+        "existing_description_count": len(existing_descriptions or []),
+        "signals": signal_names,
+    }
+    feature_snapshot_hash = hashlib.sha256(
+        json.dumps(feature_snapshot, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
     return {
         "score": final_score,
         "decision": "review" if final_score >= 60 else "allow",
+        "threshold_band": threshold_band,
         "signals": signal_names,
         "explanations": explanations,
+        "model_version": MODEL_VERSION,
+        "feature_snapshot_hash": feature_snapshot_hash,
     }
 
 

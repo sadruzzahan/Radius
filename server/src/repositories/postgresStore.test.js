@@ -86,4 +86,37 @@ describe("PostgresStore", () => {
     expect(pool.calls.some((call) => call.text.includes("insert into public.listings"))).toBe(true);
     expect(pool.calls.some((call) => call.text.includes("insert into public.listing_photos"))).toBe(true);
   });
+
+  it("writes versioned ML predictions and labels to trust tables", async () => {
+    const pool = makePool([
+      { rows: [{ id: "prediction-1", listing_id: "listing-1", model_name: "trust_fraud_classifier", model_version: "rules-risk-v1", score: 84, decision: "review", threshold_band: "high_priority_review", signals: ["price_anomaly"], explanations: ["Risky price"], feature_snapshot_hash: "hash", raw_response: { score: 84 }, created_at: "now" }] },
+      { rows: [{ id: "label-1", source_type: "admin", source_id: "listing-1", listing_id: "listing-1", actor_id: "admin-1", label: "fraud", confidence: "1", notes: "removed", created_at: "now" }] }
+    ]);
+    const store = new PostgresStore(pool);
+
+    const prediction = await store.createMlPrediction({
+      listingId: "listing-1",
+      modelVersion: "rules-risk-v1",
+      score: 84,
+      decision: "review",
+      thresholdBand: "high_priority_review",
+      signals: ["price_anomaly"],
+      explanations: ["Risky price"],
+      featureSnapshotHash: "hash",
+      rawResponse: { score: 84 }
+    });
+    const label = await store.createMlLabel({
+      sourceType: "admin",
+      sourceId: "listing-1",
+      listingId: "listing-1",
+      actorId: "admin-1",
+      label: "fraud",
+      notes: "removed"
+    });
+
+    expect(pool.calls[0].text).toContain("insert into public.ml_predictions");
+    expect(pool.calls[1].text).toContain("insert into public.ml_labels");
+    expect(prediction).toMatchObject({ modelVersion: "rules-risk-v1", score: 84 });
+    expect(label).toMatchObject({ sourceType: "admin", label: "fraud", confidence: 1 });
+  });
 });
