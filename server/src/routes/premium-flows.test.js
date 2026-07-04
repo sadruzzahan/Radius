@@ -148,6 +148,18 @@ describe("premium marketplace flows", () => {
     });
   });
 
+  it("returns a proper inbox of conversations for the current user", async () => {
+    const response = await request(app).get("/api/chat").set("Authorization", `Bearer ${buyerToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.items.length).toBeGreaterThan(0);
+    expect(response.body.items[0]).toMatchObject({
+      id: expect.any(String),
+      listing: expect.objectContaining({ title: expect.any(String), price: expect.any(Number) }),
+      lastMessage: expect.objectContaining({ body: expect.any(String) })
+    });
+  });
+
   it("keeps listing chat scoped to the buyer-seller conversation", async () => {
     const listings = await request(app).get("/api/listings?radiusKm=999").set("Authorization", `Bearer ${buyerToken}`);
     const samsung = listings.body.items.find((item) => item.title === "Samsung Galaxy S22");

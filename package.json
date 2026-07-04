@@ -8,9 +8,11 @@
     "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\" \"npm run dev:ml\"",
     "dev:ml": "cd ml_service && .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload",
     "seed": "npm run seed -w server",
+    "seed:showcase": "npm run seed:showcase -w server",
     "test": "npm run test -w server && cd ml_service && .venv/bin/python -m pytest -q",
     "build": "npm run build -w client",
-    "install:ml": "cd ml_service && python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt"
+    "install:ml": "cd ml_service && python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt",
+    "dataset:large": "cd ml_service && .venv/bin/python scripts/build_market_dataset.py 15000 && .venv/bin/python scripts/build_fraud_dataset.py 20000"
   },
   "workspaces": [
     "server",

@@ -13,6 +13,39 @@ const dhakaPoints = {
   mohammadpur: { lat: 23.7639, lng: 90.3588 }
 };
 
+const demoListingPhotos = {
+  "iPhone 13 128GB": {
+    url: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=84",
+    hash: "6f9d7c2a1b3e4d50",
+    storage: "web"
+  },
+  "Samsung Galaxy S22": {
+    url: "https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?auto=format&fit=crop&w=1200&q=84",
+    hash: "89b6a5c4d3e2f101",
+    storage: "web"
+  },
+  "Dell XPS 13": {
+    url: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1200&q=84",
+    hash: "b7a61244e9c03f18",
+    storage: "web"
+  },
+  "Study Table": {
+    url: "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=1200&q=84",
+    hash: "3c5d7812aa90ef34",
+    storage: "web"
+  },
+  "Canon EOS 700D": {
+    url: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=1200&q=84",
+    hash: "44aa87ce1290ff32",
+    storage: "web"
+  },
+  "iPhone 13 urgent sale": {
+    url: "https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?auto=format&fit=crop&w=1200&q=84",
+    hash: "ff00ff00ff00ff00",
+    storage: "web"
+  }
+};
+
 export class MemoryStore {
   constructor() {
     this.users = [];
@@ -79,7 +112,7 @@ export class MemoryStore {
         price: row[4],
         description: row[5],
         location: dhakaPoints[row[6]],
-        photos: [{ url: `/uploads/demo-${index + 1}.jpg`, hash: index === 5 ? "ff00ff00ff00ff00" : randomUUID().replaceAll("-", "").slice(0, 16) }],
+        photos: [demoListingPhotos[row[0]] ?? { url: `/uploads/demo-${index + 1}.jpg`, hash: randomUUID().replaceAll("-", "").slice(0, 16), storage: "local" }],
         fraud: index === 5 ? { score: 84, decision: "review", signals: ["price_anomaly", "urgent_language"], explanations: ["Showcase suspicious marketplace case"] } : undefined
       });
     }
@@ -207,7 +240,7 @@ export class MemoryStore {
   }
 
   async listExistingDescriptions() {
-    return this.listings.map((listing) => listing.description);
+    return this.listings.map((listing) => `${listing.title ?? ""} ${listing.description ?? ""}`.trim()).filter(Boolean);
   }
 
   async createMessage(data) {
@@ -260,6 +293,32 @@ export class MemoryStore {
       .filter((conversation) => !userId || conversation.buyerId === userId || conversation.sellerId === userId)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map((conversation) => this.withConversationUsers(conversation));
+  }
+
+  async listConversationsForUser(userId) {
+    return this.conversations
+      .filter((conversation) => conversation.buyerId === userId || conversation.sellerId === userId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map((conversation) => {
+        const listing = this.listings.find((item) => item.id === conversation.listingId);
+        const lastMessage = this.messages
+          .filter((message) => message.conversationId === conversation.id)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+        return {
+          ...this.withConversationUsers(conversation),
+          listing: listing ? {
+            id: listing.id,
+            title: listing.title,
+            category: listing.category,
+            price: listing.price,
+            status: listing.status,
+            sellerId: listing.sellerId,
+            photos: listing.photos ?? [],
+            fraud: listing.fraud ?? { score: 0, decision: "allow", signals: [], explanations: [] }
+          } : null,
+          lastMessage
+        };
+      });
   }
 
   async listMessages(listingId, filters = {}) {

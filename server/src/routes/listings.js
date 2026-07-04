@@ -32,6 +32,36 @@ function canMutateListing(listing, user) {
   return listing.sellerId === user.id || user.role === "admin";
 }
 
+function userField(user, camelKey, snakeKey, fallback = undefined) {
+  return user?.[camelKey] ?? user?.[snakeKey] ?? fallback;
+}
+
+function accountAgeDays(user) {
+  const createdAt = userField(user, "createdAt", "created_at");
+  const createdTime = createdAt ? new Date(createdAt).getTime() : Date.now();
+  return Math.max(0, Math.floor((Date.now() - createdTime) / 86400000));
+}
+
+async function buildSellerRiskContext(seller, sellerId) {
+  const origin = {
+    lat: Number(userField(seller, "location", "location")?.lat ?? seller?.lat ?? 23.7465),
+    lng: Number(userField(seller, "location", "location")?.lng ?? seller?.lng ?? 90.376)
+  };
+  let sellerListings = [];
+  try {
+    sellerListings = (await store.listListings({ origin, radiusKm: 200 })).filter((item) => item.sellerId === sellerId);
+  } catch {
+    sellerListings = [];
+  }
+  return {
+    account_age_days: accountAgeDays(seller),
+    review_count: Number(userField(seller, "reviewCount", "review_count", 0) ?? 0),
+    rating_average: Number(userField(seller, "ratingAverage", "rating_average", 0) ?? 0),
+    active_listing_count: sellerListings.filter((item) => ["available", "reserved"].includes(item.status)).length,
+    prior_flagged_listings: sellerListings.filter((item) => item.fraud?.decision === "review" || Number(item.fraud?.score ?? 0) >= 60).length
+  };
+}
+
 router.get("/", async (req, res) => {
   const origin = {
     lat: Number(req.query.lat ?? req.user?.location?.lat ?? 23.7465),
@@ -55,13 +85,15 @@ router.post("/", requireAuth, async (req, res) => {
   const parsed = listingSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid listing: photos must be server-issued upload metadata.", details: parsed.error.issues });
   const seller = await store.findUserById(req.user.id);
+  const [existingHashes, existingDescriptions, sellerContext] = await Promise.all([
+    store.listExistingPhotoHashes(),
+    store.listExistingDescriptions(),
+    buildSellerRiskContext(seller, req.user.id)
+  ]);
   const scoring = await scoreListingWithMl(parsed.data, {
-    seller: {
-      account_age_days: Math.max(0, Math.floor((Date.now() - new Date(seller.createdAt).getTime()) / 86400000)),
-      review_count: seller.reviewCount
-    },
-    existingHashes: await store.listExistingPhotoHashes(),
-    existingDescriptions: await store.listExistingDescriptions()
+    seller: sellerContext,
+    existingHashes,
+    existingDescriptions
   });
   const listing = await store.createListing({ ...parsed.data, sellerId: req.user.id, fraud: scoring });
   await store.createMlEvent?.({

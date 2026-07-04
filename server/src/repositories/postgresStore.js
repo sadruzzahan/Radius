@@ -236,8 +236,8 @@ export class PostgresStore {
   }
 
   async listExistingDescriptions() {
-    const result = await this.pool.query("select description from public.listings limit 5000");
-    return result.rows.map((row) => row.description).filter(Boolean);
+    const result = await this.pool.query("select concat_ws(' ', title, description) as text from public.listings limit 5000");
+    return result.rows.map((row) => row.text).filter(Boolean);
   }
 
   async ensureConversation(data) {
@@ -279,6 +279,79 @@ export class PostgresStore {
       values
     );
     return result.rows.map(toConversation);
+  }
+
+  async listConversationsForUser(userId) {
+    const result = await this.pool.query(
+      `select
+         c.*,
+         buyer.name as buyer_name,
+         seller.name as seller_name,
+         l.title as listing_title,
+         l.category as listing_category,
+         l.price as listing_price,
+         l.status as listing_status,
+         l.seller_id as listing_seller_id,
+         l.fraud_score,
+         l.fraud_decision,
+         l.fraud_signals,
+         l.fraud_explanations,
+         photo.url as photo_url,
+         photo.hash as photo_hash,
+         last_message.id as last_message_id,
+         last_message.sender_id as last_sender_id,
+         last_message.recipient_id as last_recipient_id,
+         last_message.body as last_body,
+         last_message.created_at as last_created_at
+       from public.conversations c
+       join public.app_users buyer on buyer.id = c.buyer_id
+       join public.app_users seller on seller.id = c.seller_id
+       join public.listings l on l.id = c.listing_id
+       left join lateral (
+         select lp.url, lp.hash
+         from public.listing_photos lp
+         where lp.listing_id = l.id
+         order by lp.id asc
+         limit 1
+       ) photo on true
+       left join lateral (
+         select cm.*
+         from public.chat_messages cm
+         where cm.conversation_id = c.id
+         order by cm.created_at desc
+         limit 1
+       ) last_message on true
+       where c.buyer_id = $1 or c.seller_id = $1
+       order by coalesce(last_message.created_at, c.updated_at, c.created_at) desc`,
+      [userId]
+    );
+    return result.rows.map((row) => ({
+      ...toConversation(row),
+      listing: {
+        id: row.listing_id,
+        title: row.listing_title,
+        category: row.listing_category,
+        price: Number(row.listing_price),
+        status: row.listing_status,
+        sellerId: row.listing_seller_id,
+        photos: row.photo_url ? [{ url: row.photo_url, hash: row.photo_hash }] : [],
+        fraud: {
+          score: row.fraud_score ?? 0,
+          decision: row.fraud_decision ?? "allow",
+          signals: row.fraud_signals ?? [],
+          explanations: row.fraud_explanations ?? []
+        }
+      },
+      lastMessage: row.last_message_id ? {
+        id: row.last_message_id,
+        conversationId: row.id,
+        listingId: row.listing_id,
+        senderId: row.last_sender_id,
+        recipientId: row.last_recipient_id,
+        body: row.last_body,
+        createdAt: row.last_created_at
+      } : null
+    }));
   }
 
   async createMessage(data) {

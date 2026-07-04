@@ -57,7 +57,15 @@ seeded_listings as (
   returning id, title
 )
 insert into public.listing_photos (listing_id, url, hash, storage)
-select id, '/uploads/' || lower(replace(title, ' ', '-')) || '.jpg',
+select id,
+  case title
+    when 'iPhone 13 128GB' then 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=84'
+    when 'Samsung Galaxy S22' then 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?auto=format&fit=crop&w=1200&q=84'
+    when 'Dell XPS 13' then 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1200&q=84'
+    when 'Study Table' then 'https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?auto=format&fit=crop&w=1200&q=84'
+    when 'Canon EOS 700D' then 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=1200&q=84'
+    when 'iPhone 13 urgent sale' then 'https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?auto=format&fit=crop&w=1200&q=84'
+  end,
   case when title = 'iPhone 13 urgent sale' then 'ff00ff00ff00ff00' else substr(md5(title), 1, 16) end,
   'local'
 from seeded_listings;

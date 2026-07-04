@@ -277,9 +277,9 @@ export class SupabaseStore {
   }
 
   async listExistingDescriptions() {
-    const { data, error } = await this.client.from("listings").select("description").limit(5000);
+    const { data, error } = await this.client.from("listings").select("title,description").limit(5000);
     throwIfError(error);
-    return data.map((row) => row.description).filter(Boolean);
+    return data.map((row) => `${row.title ?? ""} ${row.description ?? ""}`.trim()).filter(Boolean);
   }
 
   async ensureConversation(data) {
@@ -315,6 +315,59 @@ export class SupabaseStore {
     const { data, error } = await query;
     throwIfError(error);
     return data.map(toConversation);
+  }
+
+  async listConversationsForUser(userId) {
+    const { data, error } = await this.client
+      .from("conversations")
+      .select(`
+        *,
+        buyer:app_users!conversations_buyer_id_fkey(id,name),
+        seller:app_users!conversations_seller_id_fkey(id,name),
+        listing:listings!conversations_listing_id_fkey(
+          id,title,category,price,status,seller_id,fraud_score,fraud_decision,fraud_signals,fraud_explanations,
+          listing_photos(url,hash)
+        )
+      `)
+      .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`)
+      .order("updated_at", { ascending: false });
+    throwIfError(error);
+    const conversationIds = data.map((row) => row.id);
+    let latestMessages = new Map();
+    if (conversationIds.length) {
+      const { data: messages, error: messageError } = await this.client
+        .from("chat_messages")
+        .select("*")
+        .in("conversation_id", conversationIds)
+        .order("created_at", { ascending: false });
+      throwIfError(messageError);
+      for (const message of messages) {
+        if (!latestMessages.has(message.conversation_id)) latestMessages.set(message.conversation_id, toMessage(message));
+      }
+    }
+    return data.map((row) => {
+      const listing = row.listing;
+      const photo = listing?.listing_photos?.[0];
+      return {
+        ...toConversation(row),
+        listing: listing ? {
+          id: listing.id,
+          title: listing.title,
+          category: listing.category,
+          price: Number(listing.price),
+          status: listing.status,
+          sellerId: listing.seller_id,
+          photos: photo ? [{ url: photo.url, hash: photo.hash }] : [],
+          fraud: {
+            score: listing.fraud_score ?? 0,
+            decision: listing.fraud_decision ?? "allow",
+            signals: listing.fraud_signals ?? [],
+            explanations: listing.fraud_explanations ?? []
+          }
+        } : null,
+        lastMessage: latestMessages.get(row.id) ?? null
+      };
+    });
   }
 
   async createMessage(data) {
