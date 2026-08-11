@@ -7,9 +7,25 @@ function redirect(string $path): never { header('Location: ' . $path); exit; }
 function flash(string $type, string $message): void { $_SESSION['flash_' . $type] = $message; }
 function pull_flash(string $type): ?string { $key='flash_'.$type; $v=$_SESSION[$key] ?? null; unset($_SESSION[$key]); return $v; }
 function money(float|int|string $value): string { return '৳' . number_format((float)$value, 0); }
-function trust_label(string $status): string { return ['safe'=>'Verified','low_risk'=>'Under Review','suspicious'=>'Suspicious','high_risk'=>'Flagged'][$status] ?? 'Unchecked'; }
-function trust_class(string $status): string { return 'trust-' . preg_replace('/[^a-z_]/', '', $status); }
-function trust_state(string $status): string { return match($status){'safe'=>'verified','low_risk'=>'review','suspicious','high_risk'=>'danger',default=>'review'}; }
+
+function is_admin_reviewed(string $trustStatus, ?string $listingStatus = null): bool {
+    return $listingStatus === 'approved' && !in_array($trustStatus, ['safe','low_risk'], true);
+}
+
+function trust_label(string $status, ?string $listingStatus = null): string {
+    if (is_admin_reviewed($status, $listingStatus)) return 'Admin Reviewed';
+    return ['safe'=>'Verified','low_risk'=>'Low Risk','suspicious'=>'Suspicious','high_risk'=>'High Risk'][$status] ?? 'Unchecked';
+}
+
+function trust_class(string $status, ?string $listingStatus = null): string {
+    if (is_admin_reviewed($status, $listingStatus)) return 'trust-safe';
+    return 'trust-' . preg_replace('/[^a-z_]/', '', $status);
+}
+
+function trust_state(string $status, ?string $listingStatus = null): string {
+    if (is_admin_reviewed($status, $listingStatus)) return 'verified';
+    return match($status){'safe'=>'verified','low_risk'=>'review','suspicious','high_risk'=>'danger',default=>'review'};
+}
 
 function radius_visuals(): array {
     return [
