@@ -1,11 +1,10 @@
-node_modules/
-.agents/
-client/dist/
-ml_service/.venv/
+.env
+*.log
 __pycache__/
 .pytest_cache/
-# .env removed to track it
-server/uploads/
-tmp/
-*.log
-*.pid
+ai_service/.venv/
+ai_service/models/*.joblib
+uploads/listings/*
+!uploads/listings/.gitkeep
+uploads/profiles/*
+!uploads/profiles/.gitkeep
