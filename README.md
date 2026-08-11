@@ -1,124 +1,136 @@
-# NeighborTrust Hyperlocal Marketplace
+# RADIUS — Hyperlocal Secondhand Marketplace
 
-Full-stack MERN-style secondhand marketplace with roles, geofenced browsing, participant-scoped chat, trade workflow, reviews, reports, admin moderation, explainable trust/risk scoring, and price suggestion.
+RADIUS is a CSE479 mini-project: a PHP/MySQL hyperlocal secondhand marketplace with an explainable Python/FastAPI fraud-risk service.
+
+> **Important:** the trust layer produces risk signals, not proof that a user or listing is fraudulent. Suspicious/high-risk listings are routed to human moderation.
+
+## Required stack
+
+**Main application:** PHP 8+, HTML5, CSS3, vanilla JavaScript, MySQL, PHP Sessions, PDO.  
+**AI service:** Python 3, FastAPI, pandas, scikit-learn, Pillow, ImageHash.
+
+There is no React, Vite, Node.js, Express, Socket.io, or Supabase dependency in this rewrite.
 
 ## Features
 
-- Guest, registered user, and admin roles.
-- JWT auth with bcrypt password hashing.
-- Listing CRUD with category, condition, price, description, location, and photo hash metadata.
-- Authenticated listing photo uploads through Supabase Storage with server-side pHash generation.
-- Geofenced browsing with radius, location, category, condition, price, and search filters.
-- Socket.io real-time chat scoped to buyer-seller conversations.
-- Trade requests with requested, accepted, rejected, cancelled, and completed states.
-- Reviews/reputation only after completed trades.
-- Reports for suspicious listings.
-- Admin analytics, user moderation, and trust/risk review queue.
-- FastAPI trust service: duplicate image hash comparison, price anomaly detection, behavioral/text rules, risk score, evaluation, and price suggestion.
-- Showcase trust foundation: event capture, prediction audit records, admin/report/manual labels, manual CSV ingestion, and candidate training metrics.
-- Supabase/Postgres schema with PostGIS geofence functions plus credential-free memory demo/test mode.
+- Guest browse/search/filter and nearby-distance discovery.
+- Registration/login/logout with `password_hash()` / `password_verify()` and PHP sessions.
+- Buyer/seller profiles, listing creation, secure local image uploads, reporting, reviews.
+- Buyer-seller chat with lightweight 3-second AJAX polling.
+- Trade states: requested → accepted/rejected → cancelled/completed.
+- Trust Radar visualization.
+- Admin dashboard, user/listing management, reports, fraud queue, complete risk panels.
+- Graceful AI-service failure: listing persists and admin can retry analysis.
+- CSRF protection, PDO prepared statements, output escaping, role authorization, MIME/image validation, randomized filenames.
 
-## Research Papers / Sources Used
+## Explainable fraud analysis
 
-- Liu et al., numeric ML design for detecting organized retail crime listings in marketplaces.
-- E-commerce fraud detection ML survey/review work for precision/recall evaluation.
-- Perceptual hashing and near-duplicate image detection literature for pHash/Hamming-distance duplicate checks.
-- Secondhand item price prediction work using regression and MAE-style evaluation.
+`POST /analyze-listing` returns a 0–100 score and five components:
 
-## Run
+- Image similarity — **25%**: pHash + Hamming distance (`<=5` high, `6–10` medium).
+- Price anomaly — **25%**: `RandomForestRegressor` estimates expected market price.
+- Seller risk — **20%**: account age, reports, removed/suspicious listings, completed-trade/review history.
+- Text risk — **20%**: TF-IDF + `MultinomialNB`, with reused-text signal.
+- Policy/brand risk — **10%**: prohibited/off-platform phrases and recognizable brand mismatch.
 
-```bash
-npm install
-npm run install:ml
-npm run dev
+Bands: `0–29 Safe`, `30–49 Low Risk`, `50–69 Suspicious`, `70–100 High Risk`.
+
+## Main structure
+
+```text
+/admin              moderation pages
+/api                chat/trade/fraud actions
+/assets             responsive CSS + vanilla JS
+/config             app + PDO configuration
+/includes           auth, CSRF, shared helpers/layout
+/uploads            listing/profile images
+/ai_service         FastAPI service, seed datasets, generator
+index.php            home
+listings.php         marketplace
+listing.php          listing detail
+create-listing.php   secure listing creation + AI analysis
+messages.php/chat.php
+trade-requests.php
+trust-radar.php
+database.sql
+seed.php
 ```
 
-URLs:
+## Local setup
 
-- Frontend: `http://localhost:5173`
-- API: `http://localhost:4000/healthz`
-- ML service: `http://localhost:8001/health`
+1. Create the database and schema:
+   ```bash
+   mysql -u root -p < database.sql
+   ```
+2. Export environment variables (or configure them in Replit Secrets):
+   ```bash
+   export DB_HOST=127.0.0.1
+   export DB_PORT=3306
+   export DB_NAME=radius
+   export DB_USER=root
+   export DB_PASSWORD='your-password'
+   export AI_SERVICE_URL=http://127.0.0.1:8001
+   ```
+3. Install the AI dependencies:
+   ```bash
+   python3 -m pip install -r ai_service/requirements.txt
+   ```
+4. Optionally generate the large academic datasets:
+   ```bash
+   python3 ai_service/training/generate_datasets.py 15000 20000
+   ```
+5. Seed demo data:
+   ```bash
+   php seed.php
+   ```
+6. Run both services:
+   ```bash
+   bash run.sh
+   ```
+7. Open the PHP server (default `http://localhost:3000`). FastAPI health is `http://127.0.0.1:8001/health`.
 
-## Supabase
+## Replit
 
-Apply the schema and seed data through the direct Postgres connection. On networks without IPv6 route to the direct database host, use the Supabase session pooler URL shown below.
+1. Import this GitHub repository into Replit.
+2. Provision an external MySQL-compatible database if MySQL is not available in the Repl.
+3. Add Secrets: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `AI_SERVICE_URL=http://127.0.0.1:8001`.
+4. Run `mysql ... < database.sql` against the external database once, then `php seed.php`.
+5. Click **Run**. `.replit` invokes `bash run.sh`; FastAPI uses local port 8001 and PHP uses Replit's `$PORT`.
 
-```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/schema.sql
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/seed.sql
-```
+## Demo accounts
 
-Runtime variables for Supabase mode:
+After `php seed.php`, all demo accounts use password `RadiusDemo123!`:
 
-```bash
-DATABASE_URL=postgresql://postgres.eowhnrcoqcvtyobbinhl:<password>@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres
-USE_MEMORY_STORE=false
-JWT_SECRET=<32+ character server secret>
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
-SUPABASE_STORAGE_BUCKET=listing-photos
-```
+- Admin: `admin@radius.test`
+- Seller: `seller@radius.test`
+- Buyer: `buyer@radius.test`
+- User: `nadia@radius.test`
 
-Create the `listing-photos` Storage bucket in Supabase before using uploads. The service-role key stays on the Express server only; the browser sends images to `POST /api/uploads/listing-photo` and receives server-issued `{ url, path, hash, storage }` metadata for listing creation.
+The seed creates at least 20 realistic listings with varied categories and trust states.
 
-Use `USE_MEMORY_STORE=false` for any showcase, staging, or real persisted run. Use `USE_MEMORY_STORE=true` only for local smoke tests or credential-free demos where data loss is expected.
+## API
 
-Demo accounts:
+### FastAPI
+- `GET /health` → `{ "status": "ok" }`
+- `POST /hash-image` → perceptual image hash
+- `POST /analyze-listing` → explainable risk result
 
-- Admin: `admin@local.test` / `admin12345`
-- Sellers: `seller1@local.test` through `seller5@local.test` / `password123`
-- Showcase owner: `istykhan.ik@gmail.com` / `password123` when created by `npm run seed:showcase`
+### PHP action endpoints
+- `/api/chat.php` — start/send/poll conversation messages
+- `/api/trade.php` — request/accept/reject/cancel/complete trades
+- `/api/fraud.php` — admin approve/remove/retry analysis
 
-## Verify
+## Security notes
 
-```bash
-npm test
-npm run build
-```
+- Never commit `.env` or production credentials.
+- Rotate any credentials that were committed in earlier repository history.
+- Uploaded images are validated by upload error, size, extension, MIME and image decoding; generated filenames are random.
+- User supplied HTML is escaped with `htmlspecialchars`.
+- Private conversations are scoped to their buyer/seller participants.
+- Users cannot perform seller-only trade transitions or admin moderation actions.
 
-## Dataset
+## Final workflow to test
 
-`ml_service/data/market_prices.csv` is the bundled baseline dataset for category-condition price statistics and the price suggestion regressor. `ml_service/scripts/collect_bikroy_sample.py` is a documented collector template for expanding the dataset from allowed public listing pages or manually collected CSVs.
+Guest → Browse → Register → Login → Create listing → Upload image → Fraud analysis → Listing/moderation → Another user views → Chat → Trade request → Seller accepts → Complete → Review.
 
-`ml_service/scripts/build_market_dataset.py` generates `ml_service/data/market_prices_expanded.csv` with deterministic Dhaka secondhand-market rows across phones, laptops, cameras, furniture, bicycles, appliances, fashion, books, gaming, and accessories. The ML service prefers the expanded CSV when present.
-
-`ml_service/scripts/build_fraud_dataset.py` generates `ml_service/data/fraud_listings_synthetic.csv`, a labeled synthetic fraud dataset with clean, fraud, duplicate, prohibited, and spam examples for academic experimentation and model training demos.
-
-Generate the large local datasets:
-
-```bash
-npm run dataset:large
-```
-
-Current large dataset targets:
-
-- 15,000 price rows in `market_prices_expanded.csv`
-- 20,000 labeled fraud rows in `fraud_listings_synthetic.csv`
-
-## Showcase Trust/Risk Engine
-
-The trust/risk path records durable scoring and training signals, but the online fraud decision is intentionally an explainable rules-and-signals engine for the showcase:
-
-- `ml_events`: listing submissions, user reports, and admin fraud decisions.
-- `ml_predictions`: model version, score, decision, threshold band, signals, explanations, and feature snapshot hash for every listing score.
-- `ml_labels`: ground-truth labels from admins, report-derived weak labels, and manual CSV imports.
-- `ml_model_versions` and `ml_training_runs`: model registry and training-run metadata.
-
-FastAPI endpoints:
-
-- `POST /datasets/manual-csv` accepts a CSV file with `title,description,category,price,condition,source,label,label_reason`.
-- `POST /train/candidate` accepts normalized records and returns model version, metrics, and candidate/rejected promotion status.
-- `POST /score` remains the online listing risk scorer and returns `model_version`, `threshold_band`, and `feature_snapshot_hash`.
-
-Initial showcase policy: reports are weak labels, admin decisions are strong labels, and manual CSV rows are training data only. The app does not auto-remove listings; high-risk scores prioritize admin review.
-
-## Large Demo Seed
-
-```bash
-npm run seed:showcase
-npm run seed:500 -w server
-```
-
-`npm run seed:showcase` creates targeted listings for `istykhan.ik@gmail.com`, including clean listings, multiple fraud types, ML prediction records, ML labels, reports, conversations, and completed trades.
-
-`npm run seed:500 -w server` creates 55 showcase users, 500 listings, 140 completed-trade reviews, 35 reports, varied statuses, and deterministic duplicate/risk cases through the configured store. It is not idempotent; use it when you intentionally want more demo volume.
+Also test: suspicious listing → Fraud Queue → full explanation → Admin approve/remove; report flow; duplicate review/trade protection; AI service unavailable; unauthorized admin/chat access; invalid image upload.
