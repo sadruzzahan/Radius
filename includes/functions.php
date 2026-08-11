@@ -82,5 +82,5 @@ function run_fraud_analysis(int $listingId): ?array {
 }
 
 function haversine_sql(string $lat='l.latitude', string $lng='l.longitude'): string {
-    return "(6371 * ACOS(LEAST(1, COS(RADIANS(:ulat)) * COS(RADIANS($lat)) * COS(RADIANS($lng)-RADIANS(:ulng)) + SIN(RADIANS(:ulat)) * SIN(RADIANS($lat)))))";
+    return "(6371 * ACOS(LEAST(1, COS(RADIANS(:ulat1)) * COS(RADIANS($lat)) * COS(RADIANS($lng)-RADIANS(:ulng)) + SIN(RADIANS(:ulat2)) * SIN(RADIANS($lat)))))";
 }
