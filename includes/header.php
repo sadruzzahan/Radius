@@ -19,7 +19,7 @@ function nav_active(string $path,string $current): string { return $current===$p
     <?php if($user && $user['role']==='admin'):?><a class="topnav-item<?=str_starts_with($currentPath,'/admin/')?' active':''?>" href="/admin/dashboard.php">Admin</a><?php endif;?>
   </nav>
   <div class="topnav-right">
-    <?php if($user):?><span class="user-info"><?=e($user['name'])?></span><a class="btn btn-secondary btn-sm" href="/profile.php">Profile</a><a class="btn btn-ghost btn-sm" href="/logout.php">Sign Out</a><?php else:?><a class="btn btn-ghost btn-sm" href="/login.php">Login</a><a class="btn btn-primary btn-sm" href="/register.php">Register</a><?php endif;?>
+    <?php if($user):?><span class="user-info"><?=e($user['name'])?></span><?php if($user['role']==='admin'):?><a class="btn btn-secondary btn-sm" href="/admin/dashboard.php">Admin</a><?php endif;?><a class="btn btn-secondary btn-sm" href="/profile.php">Profile</a><a class="btn btn-ghost btn-sm" href="/logout.php">Sign Out</a><?php else:?><a class="btn btn-ghost btn-sm" href="/login.php">Login</a><a class="btn btn-primary btn-sm" href="/register.php">Register</a><?php endif;?>
   </div>
 </header>
 <?php if($success):?><div class="toast-container"><div class="toast toast-success"><?=e($success)?></div></div><?php endif;?><?php if($error):?><div class="toast-container"><div class="toast toast-error"><?=e($error)?></div></div><?php endif;?>
