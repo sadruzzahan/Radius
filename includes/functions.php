@@ -7,8 +7,67 @@ function redirect(string $path): never { header('Location: ' . $path); exit; }
 function flash(string $type, string $message): void { $_SESSION['flash_' . $type] = $message; }
 function pull_flash(string $type): ?string { $key='flash_'.$type; $v=$_SESSION[$key] ?? null; unset($_SESSION[$key]); return $v; }
 function money(float|int|string $value): string { return '৳' . number_format((float)$value, 0); }
-function trust_label(string $status): string { return ['safe'=>'Trusted','low_risk'=>'Low Risk','suspicious'=>'Suspicious','high_risk'=>'High Risk'][$status] ?? 'Unchecked'; }
+function trust_label(string $status): string { return ['safe'=>'Verified','low_risk'=>'Under Review','suspicious'=>'Suspicious','high_risk'=>'Flagged'][$status] ?? 'Unchecked'; }
 function trust_class(string $status): string { return 'trust-' . preg_replace('/[^a-z_]/', '', $status); }
+function trust_state(string $status): string { return match($status){'safe'=>'verified','low_risk'=>'review','suspicious','high_risk'=>'danger',default=>'review'}; }
+
+function radius_visuals(): array {
+    return [
+        'phone'=>[
+            'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=900&q=82',
+            'https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=900&q=82',
+            'https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?auto=format&fit=crop&w=900&q=82',
+            'https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?auto=format&fit=crop&w=900&q=82'],
+        'laptop'=>[
+            'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=900&q=82',
+            'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=900&q=82'],
+        'camera'=>[
+            'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=900&q=82',
+            'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?auto=format&fit=crop&w=900&q=82'],
+        'furniture'=>[
+            'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=900&q=82',
+            'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=900&q=82'],
+        'bicycle'=>[
+            'https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=900&q=82',
+            'https://images.unsplash.com/photo-1507035895480-2b3156c31fc8?auto=format&fit=crop&w=900&q=82'],
+        'appliance'=>[
+            'https://images.unsplash.com/photo-1585659722983-3a675dabf23d?auto=format&fit=crop&w=900&q=82',
+            'https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=900&q=82'],
+        'fashion'=>[
+            'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=82',
+            'https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=900&q=82'],
+        'books'=>[
+            'https://images.unsplash.com/photo-1495446815901-a7297e633e8d?auto=format&fit=crop&w=900&q=82',
+            'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=900&q=82'],
+        'gaming'=>[
+            'https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?auto=format&fit=crop&w=900&q=82',
+            'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=900&q=82'],
+        'accessories'=>[
+            'https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=900&q=82',
+            'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=900&q=82'],
+    ];
+}
+
+function stable_visual_index(string $seed, int $count): int {
+    if ($count < 1) return 0;
+    return abs((int)crc32(strtolower($seed))) % $count;
+}
+
+function listing_visual(array $listing): string {
+    $uploaded = trim((string)($listing['image_path'] ?? ''));
+    if ($uploaded !== '') return $uploaded;
+    $all = radius_visuals();
+    $category = strtolower((string)($listing['category'] ?? 'accessories'));
+    $images = $all[$category] ?? $all['accessories'];
+    $seed = strtolower((string)($listing['title'] ?? $listing['id'] ?? $category));
+    $index = stable_visual_index($seed, count($images));
+    if ($category === 'phone') {
+        if (str_contains($seed,'samsung')) $index = min(3,count($images)-1);
+        elseif (str_contains($seed,'urgent') || str_contains($seed,'pro')) $index=min(2,count($images)-1);
+        elseif (str_contains($seed,'iphone')) $index=0;
+    }
+    return $images[$index];
+}
 
 function ai_json(string $path, array $payload, int $timeout = 12): ?array {
     if (!function_exists('curl_init')) return null;
