@@ -1,29 +1,7 @@
 <?php
-require_once dirname(__DIR__).'/includes/auth.php';
-require_once dirname(__DIR__).'/includes/functions.php';
-require_once dirname(__DIR__).'/includes/csrf.php';
-require_admin();
-verify_csrf();
-
-$id=(int)($_POST['listing_id']??0);
-$action=$_POST['action']??'';
-
-if($action==='retry'){
-    $r=run_fraud_analysis($id);
-    flash($r?'success':'error',$r?'Fraud analysis refreshed.':'Fraud analysis temporarily unavailable.');
-    redirect('/listing.php?id='.$id);
-}
-
-if($action==='approve'){
-    db()->prepare("UPDATE listings SET status='approved',updated_at=NOW() WHERE id=?")->execute([$id]);
-    flash('success','Listing approved by admin. Any original AI risk score is preserved in the moderation record.');
-    redirect('/admin/fraud_queue.php');
-}
-
-if($action==='remove'){
-    db()->prepare("UPDATE listings SET status='removed',updated_at=NOW() WHERE id=?")->execute([$id]);
-    flash('success','Listing removed.');
-    redirect('/admin/fraud_queue.php');
-}
-
-http_response_code(400);
+declare(strict_types=1);
+require_once dirname(__DIR__).'/includes/auth.php';require_once dirname(__DIR__).'/includes/functions.php';require_once dirname(__DIR__).'/includes/csrf.php';require_admin();if($_SERVER['REQUEST_METHOD']!=='POST'){http_response_code(405);exit('Method Not Allowed.');}verify_csrf();$pdo=db();$id=(int)($_POST['listing_id']??0);$action=(string)($_POST['action']??'');$s=$pdo->prepare('SELECT * FROM listings WHERE id=? LIMIT 1');$s->execute([$id]);$listing=$s->fetch();if(!$listing){flash('error','Listing not found.');redirect('/admin/fraud_queue.php');}
+if($action==='retry'){try{$r=run_fraud_analysis($id);flash($r?'success':'error',$r?'Fraud analysis refreshed.':'Fraud analysis temporarily unavailable.');}catch(Throwable $e){error_log('Admin fraud retry failed: '.$e->getMessage());flash('error','Fraud analysis failed.');}redirect('/listing.php?id='.$id);}
+if($action==='approve'){$pdo->prepare("UPDATE listings SET status='approved',updated_at=NOW() WHERE id=? AND status IN ('pending','flagged')")->execute([$id]);flash('success','Listing approved by a human administrator. The original AI score remains in the audit record.');redirect('/admin/fraud_queue.php');}
+if($action==='remove'){$pdo->beginTransaction();try{$pdo->prepare("UPDATE listings SET status='removed',availability_status='withdrawn',updated_at=NOW() WHERE id=?")->execute([$id]);$pdo->prepare("UPDATE trade_requests SET status='cancelled',updated_at=NOW() WHERE listing_id=? AND status IN ('requested','accepted')")->execute([$id]);$pdo->commit();}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}flash('success','Listing removed by moderation.');redirect('/admin/fraud_queue.php');}
+http_response_code(400);exit('Invalid action.');
