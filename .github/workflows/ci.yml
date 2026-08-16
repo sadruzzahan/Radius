@@ -1,0 +1,24 @@
+name: RADIUS CI
+on:
+  push:
+    branches: [main, "fix/**"]
+  pull_request:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql,curl,fileinfo,mbstring
+      - name: Lint PHP
+        run: find . -type f -name '*.php' -not -path './ai_service/.venv/*' -print0 | xargs -0 -n1 php -l
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile Python
+        run: python -m compileall -q ai_service

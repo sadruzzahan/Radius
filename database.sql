@@ -13,7 +13,8 @@ CREATE TABLE users (
  longitude DECIMAL(10,7) NULL,
  profile_image VARCHAR(255) NULL,
  is_active TINYINT(1) NOT NULL DEFAULT 1,
- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ INDEX idx_users_active(is_active)
 ) ENGINE=InnoDB;
 
 CREATE TABLE listings (
@@ -29,13 +30,17 @@ CREATE TABLE listings (
  latitude DECIMAL(10,7) NULL,
  longitude DECIMAL(10,7) NULL,
  status ENUM('pending','approved','removed','flagged') NOT NULL DEFAULT 'pending',
+ availability_status ENUM('available','reserved','sold','withdrawn') NOT NULL DEFAULT 'available',
  fraud_score DECIMAL(5,2) NULL,
  trust_status ENUM('safe','low_risk','suspicious','high_risk') NULL,
  fraud_checked TINYINT(1) NOT NULL DEFAULT 0,
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
  CONSTRAINT fk_listing_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
- INDEX idx_listing_status_created(status,created_at), INDEX idx_listing_category(category), INDEX idx_listing_geo(latitude,longitude)
+ INDEX idx_listing_public(status,availability_status,created_at),
+ INDEX idx_listing_user_state(user_id,status,availability_status),
+ INDEX idx_listing_category(category),
+ INDEX idx_listing_geo(latitude,longitude)
 ) ENGINE=InnoDB;
 
 CREATE TABLE listing_images (
@@ -83,7 +88,8 @@ CREATE TABLE messages (
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
  CONSTRAINT fk_msg_conv FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
  CONSTRAINT fk_msg_sender FOREIGN KEY(sender_id) REFERENCES users(id) ON DELETE CASCADE,
- INDEX idx_message_conv(conversation_id,created_at)
+ INDEX idx_message_conv_id(conversation_id,id),
+ INDEX idx_message_unread(conversation_id,is_read,sender_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE trade_requests (
@@ -97,6 +103,7 @@ CREATE TABLE trade_requests (
  CONSTRAINT fk_trade_listing FOREIGN KEY(listing_id) REFERENCES listings(id) ON DELETE CASCADE,
  CONSTRAINT fk_trade_buyer FOREIGN KEY(buyer_id) REFERENCES users(id) ON DELETE CASCADE,
  CONSTRAINT fk_trade_seller FOREIGN KEY(seller_id) REFERENCES users(id) ON DELETE CASCADE,
+ INDEX idx_trade_listing_status(listing_id,status),
  INDEX idx_trade_users(buyer_id,seller_id,status)
 ) ENGINE=InnoDB;
 
@@ -130,6 +137,7 @@ CREATE TABLE fraud_predictions (
  feature_snapshot JSON NULL,
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
  CONSTRAINT fk_prediction_listing FOREIGN KEY(listing_id) REFERENCES listings(id) ON DELETE CASCADE,
+ INDEX idx_prediction_listing_created(listing_id,created_at),
  INDEX idx_prediction_score(fraud_score,created_at)
 ) ENGINE=InnoDB;
 
@@ -142,7 +150,7 @@ CREATE TABLE price_data (
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- Demo users: password for both accounts is RadiusDemo123!
+-- Demo users: password is RadiusDemo123!
 INSERT INTO users(name,email,password_hash,role,location,latitude,longitude) VALUES
 ('RADIUS Admin','admin@radius.test','$2y$10$XHVYIYEHeM60NEuCpEu1uu8LwLNZGhL4cOBnbzXQp2Ow2dY.KFAwa','admin','Dhaka',23.8103000,90.4125000),
 ('Demo Seller','seller@radius.test','$2y$10$XHVYIYEHeM60NEuCpEu1uu8LwLNZGhL4cOBnbzXQp2Ow2dY.KFAwa','user','Badda, Dhaka',23.7806000,90.4267000);
