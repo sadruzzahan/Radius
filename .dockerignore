@@ -1,0 +1,10 @@
+.git
+.env
+*.log
+__pycache__
+.pytest_cache
+ai_service/.venv
+uploads/listings/*
+!uploads/listings/.gitkeep
+uploads/profiles/*
+!uploads/profiles/.gitkeep

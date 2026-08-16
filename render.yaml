@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: radius-marketplace
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_URL
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_SSL_MODE
+        value: REQUIRED
+      - key: DB_SSL_CA_PEM
+        sync: false
+      - key: AI_SERVICE_URL
+        value: http://127.0.0.1:8001
+      - key: SERPAPI_KEY
+        sync: false
+      - key: MAX_UPLOAD_MB
+        value: "5"
+      - key: DEFAULT_RADIUS_KM
+        value: "5"
